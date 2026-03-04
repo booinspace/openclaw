@@ -24,11 +24,11 @@ RUN chown node:node /app
 
 ARG OPENCLAW_DOCKER_APT_PACKAGES=""
 RUN if [ -n "$OPENCLAW_DOCKER_APT_PACKAGES" ]; then \
-      apt-get update && \
-      DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $OPENCLAW_DOCKER_APT_PACKAGES && \
-      apt-get clean && \
-      rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*; \
-    fi
+apt-get update && \
+DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $OPENCLAW_DOCKER_APT_PACKAGES && \
+apt-get clean && \
+rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*; \
+fi
 
 COPY --chown=node:node package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY --chown=node:node ui/package.json ./ui/package.json
@@ -36,9 +36,13 @@ COPY --chown=node:node patches ./patches
 COPY --chown=node:node scripts ./scripts
 
 USER node
+
 # Reduce OOM risk on low-memory hosts during dependency installation.
 # Docker builds on small VMs may otherwise fail with "Killed" (exit 137).
-RUN NODE_OPTIONS=--max-old-space-size=2048 pnpm install --frozen-lockfile
+# ZFS-backed Docker storage can fail with pnpm's default import mode, so use hardlinks.
+#RUN NODE_OPTIONS=--max-old-space-size=2048 pnpm install --frozen-lockfile --package-import-method=hardlink
+RUN NODE_OPTIONS=--max-old-space-size=2048 pnpm install --frozen-lockfile --config.package-import-method=copy --network-concurrency=8
+
 
 # Optionally install Chromium and Xvfb for browser automation.
 # Build with: docker build --build-arg OPENCLAW_INSTALL_BROWSER=1 ...
@@ -47,15 +51,28 @@ RUN NODE_OPTIONS=--max-old-space-size=2048 pnpm install --frozen-lockfile
 USER root
 ARG OPENCLAW_INSTALL_BROWSER=""
 RUN if [ -n "$OPENCLAW_INSTALL_BROWSER" ]; then \
-      apt-get update && \
-      DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xvfb && \
-      mkdir -p /home/node/.cache/ms-playwright && \
-      PLAYWRIGHT_BROWSERS_PATH=/home/node/.cache/ms-playwright \
-      node /app/node_modules/playwright-core/cli.js install --with-deps chromium && \
-      chown -R node:node /home/node/.cache/ms-playwright && \
-      apt-get clean && \
-      rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*; \
-    fi
+apt-get update && \
+DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xvfb && \
+mkdir -p /home/node/.cache/ms-playwright && \
+PLAYWRIGHT_BROWSERS_PATH=/home/node/.cache/ms-playwright \
+node /app/node_modules/playwright-core/cli.js install --with-deps chromium && \
+chown -R node:node /home/node/.cache/ms-playwright && \
+apt-get clean && \
+rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*; \
+fi
+
+
+# Linuxbrew prerequisites
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      build-essential procps curl file git ca-certificates \
+      python3 python3-pip python3-venv pipx && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
+
+# Prepare Brew prefix owned by node
+RUN mkdir -p /home/linuxbrew && chown -R node:node /home/linuxbrew
+RUN mkdir -p /home/node/.local && chown -R node:node /home/node/.local
 
 # Optionally install Docker CLI for sandbox container management.
 # Build with: docker build --build-arg OPENCLAW_INSTALL_DOCKER_CLI=1 ...
@@ -90,6 +107,24 @@ RUN if [ -n "$OPENCLAW_INSTALL_DOCKER_CLI" ]; then \
     fi
 
 USER node
+ENV HOME=/home/node
+ENV HOMEBREW_PREFIX=/home/linuxbrew/.linuxbrew
+ENV HOMEBREW_CELLAR=/home/linuxbrew/.linuxbrew/Cellar
+ENV HOMEBREW_REPOSITORY=/home/linuxbrew/.linuxbrew/Homebrew
+ENV PIPX_HOME=/home/node/.local/pipx
+ENV PIPX_BIN_DIR=/home/node/.local/bin
+ENV PATH="/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/home/node/.local/bin:/root/.bun/bin:${PATH}"
+
+# Install Homebrew as node
+RUN NONINTERACTIVE=1 CI=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Optional: install gog
+RUN brew install steipete/tap/gogcli
+
+# Install Python CLI tools via pipx
+RUN pipx install homeassistant-cli
+
+
 COPY --chown=node:node . .
 # Normalize copied plugin/agent paths so plugin safety checks do not reject
 # world-writable directories inherited from source file modes.
@@ -99,7 +134,15 @@ RUN for dir in /app/extensions /app/.agent /app/.agents; do \
         find "$dir" -type f -exec chmod 644 {} +; \
       fi; \
     done
+
+# Install Matrix plugin runtime deps into the image so the bundled plugin can load.
+RUN cd /app/extensions/matrix && npm install --omit=dev
+
+# Optional: fetch native crypto binary for Matrix E2EE support.
+RUN cd /app/extensions/matrix && node node_modules/@matrix-org/matrix-sdk-crypto-nodejs/download-lib.js
+
 RUN pnpm build
+
 # Force pnpm for UI build (Bun may fail on ARM/Synology architectures)
 ENV OPENCLAW_PREFER_PNPM=1
 RUN pnpm ui:build
@@ -107,7 +150,7 @@ RUN pnpm ui:build
 # Expose the CLI binary without requiring npm global writes as non-root.
 USER root
 RUN ln -sf /app/openclaw.mjs /usr/local/bin/openclaw \
- && chmod 755 /app/openclaw.mjs
+&& chmod 755 /app/openclaw.mjs
 
 ENV NODE_ENV=production
 

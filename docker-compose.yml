@@ -4,25 +4,33 @@ services:
     environment:
       HOME: /home/node
       TERM: xterm-256color
+      NPM_CONFIG_PREFIX: /home/node/.npm-global
+      PIPX_HOME: /home/node/.local/pipx
+      PIPX_BIN_DIR: /home/node/.local/bin
+      PATH: /home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/home/node/.local/bin:/home/node/.npm-global/bin:/root/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
       OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
       OPENCLAW_ALLOW_INSECURE_PRIVATE_WS: ${OPENCLAW_ALLOW_INSECURE_PRIVATE_WS:-}
-      CLAUDE_AI_SESSION_KEY: ${CLAUDE_AI_SESSION_KEY:-}
-      CLAUDE_WEB_SESSION_KEY: ${CLAUDE_WEB_SESSION_KEY:-}
-      CLAUDE_WEB_COOKIE: ${CLAUDE_WEB_COOKIE:-}
+      CLAUDE_AI_SESSION_KEY: ${CLAUDE_AI_SESSION_KEY}
+      CLAUDE_WEB_SESSION_KEY: ${CLAUDE_WEB_SESSION_KEY}
+      CLAUDE_WEB_COOKIE: ${CLAUDE_WEB_COOKIE}
+      HASS_TOKEN: ${HASS_TOKEN}
+      HASS_SERVER: ${HASS_SERVER}
     volumes:
       - ${OPENCLAW_CONFIG_DIR}:/home/node/.openclaw
       - ${OPENCLAW_WORKSPACE_DIR}:/home/node/.openclaw/workspace
+      - /mnt/data/bernese/apps/openclaw/npm-global:/home/node/.npm-global
+      - /mnt/data/bernese/apps/openclaw/local:/home/node/.local      
       ## Uncomment the lines below to enable sandbox isolation
       ## (agents.defaults.sandbox). Requires Docker CLI in the image
       ## (build with --build-arg OPENCLAW_INSTALL_DOCKER_CLI=1) or use
       ## docker-setup.sh with OPENCLAW_SANDBOX=1 for automated setup.
       ## Set DOCKER_GID to the host's docker group GID (run: stat -c '%g' /var/run/docker.sock).
-      # - /var/run/docker.sock:/var/run/docker.sock
-    # group_add:
-    #   - "${DOCKER_GID:-999}"
+      - /var/run/docker.sock:/var/run/docker.sock
+    group_add:
+      - "${DOCKER_GID:-999}"
     ports:
-      - "${OPENCLAW_GATEWAY_PORT:-18789}:18789"
-      - "${OPENCLAW_BRIDGE_PORT:-18790}:18790"
+      - ${OPENCLAW_GATEWAY_PORT:-18789}:18789
+      - ${OPENCLAW_BRIDGE_PORT:-18790}:18790
     init: true
     restart: unless-stopped
     command:
@@ -59,6 +67,10 @@ services:
     environment:
       HOME: /home/node
       TERM: xterm-256color
+      NPM_CONFIG_PREFIX: /home/node/.npm-global
+      PIPX_HOME: /home/node/.local/pipx
+      PIPX_BIN_DIR: /home/node/.local/bin
+      PATH: /home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/home/node/.local/bin:/home/node/.npm-global/bin:/root/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
       OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
       OPENCLAW_ALLOW_INSECURE_PRIVATE_WS: ${OPENCLAW_ALLOW_INSECURE_PRIVATE_WS:-}
       BROWSER: echo
@@ -68,6 +80,8 @@ services:
     volumes:
       - ${OPENCLAW_CONFIG_DIR}:/home/node/.openclaw
       - ${OPENCLAW_WORKSPACE_DIR}:/home/node/.openclaw/workspace
+      - /mnt/data/bernese/apps/openclaw/npm-global:/home/node/.npm-global
+      - /mnt/data/bernese/apps/openclaw/local:/home/node/.local
     stdin_open: true
     tty: true
     init: true
