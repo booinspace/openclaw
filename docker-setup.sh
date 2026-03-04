@@ -6,15 +6,6 @@ ENV_FILE="$ROOT_DIR/.env"
 COMPOSE_FILE="$ROOT_DIR/docker-compose.yml"
 EXTRA_COMPOSE_FILE="$ROOT_DIR/docker-compose.extra.yml"
 
-load_env_defaults "$ENV_FILE"
-
-IMAGE_NAME="${OPENCLAW_IMAGE:-openclaw:local}"
-EXTRA_MOUNTS="${OPENCLAW_EXTRA_MOUNTS:-}"
-HOME_VOLUME_NAME="${OPENCLAW_HOME_VOLUME:-}"
-RAW_SANDBOX_SETTING="${OPENCLAW_SANDBOX:-}"
-SANDBOX_ENABLED=""
-DOCKER_SOCKET_PATH="${OPENCLAW_DOCKER_SOCKET:-}"
-
 fail() {
   echo "ERROR: $*" >&2
   exit 1
@@ -60,6 +51,15 @@ load_env_defaults() {
     fi
   done <"$file"
 }
+
+load_env_defaults "$ENV_FILE"
+
+IMAGE_NAME="${OPENCLAW_IMAGE:-openclaw:local}"
+EXTRA_MOUNTS="${OPENCLAW_EXTRA_MOUNTS:-}"
+HOME_VOLUME_NAME="${OPENCLAW_HOME_VOLUME:-}"
+RAW_SANDBOX_SETTING="${OPENCLAW_SANDBOX:-}"
+SANDBOX_ENABLED=""
+DOCKER_SOCKET_PATH="${OPENCLAW_DOCKER_SOCKET:-}"
 
 read_config_gateway_token() {
   local config_path="$OPENCLAW_CONFIG_DIR/openclaw.json"
