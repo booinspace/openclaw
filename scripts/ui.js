@@ -127,6 +127,24 @@ function runSync(cmd, args, envOverride) {
   }
 }
 
+function getInstallArgs(action) {
+  const base = ["install"];
+  if (action === "build") {
+    base.push("--prod");
+  }
+
+  // Docker/ZFS environments have been unreliable with pnpm's default import strategy.
+  // Prefer plain copies and lower concurrency for the auto-install path used by UI builds.
+  if (runnerSupportsPnpmTuning()) {
+    base.push("--config.package-import-method=copy", "--network-concurrency=8");
+  }
+  return base;
+}
+
+function runnerSupportsPnpmTuning() {
+  return Boolean(which("pnpm"));
+}
+
 function depsInstalled(kind) {
   try {
     const require = createRequire(path.join(uiDir, "package.json"));
@@ -186,7 +204,7 @@ export function main(argv = process.argv.slice(2)) {
   if (!depsInstalled(action === "test" ? "test" : "build")) {
     const installEnv =
       action === "build" ? { ...process.env, NODE_ENV: "production" } : process.env;
-    const installArgs = action === "build" ? ["install", "--prod"] : ["install"];
+    const installArgs = getInstallArgs(action);
     runSync(runner.cmd, installArgs, installEnv);
   }
 
